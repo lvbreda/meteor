@@ -8,6 +8,7 @@ Fiber(function () {
   var deploy = require('./deploy.js');
   var runner = require('./run.js');
   var library = require('./library.js');
+  var buildmessage = require('./buildmessage.js');
   var project = require('./project.js');
   var warehouse = require('./warehouse.js');
   var logging = require('./logging.js');
@@ -630,9 +631,7 @@ Fiber(function () {
       });
       if (bundleResult.errors) {
         process.stdout.write("Errors prevented bundling:\n");
-        _.each(bundleResult.errors, function (e) {
-          process.stdout.write(e + "\n");
-        });
+        process.stdout.write(bundleResult.errors.formatMessages());
         process.exit(1);
       }
 
@@ -883,6 +882,10 @@ Fiber(function () {
 
       var testPackages;
       if (_.isEmpty(argv._)) {
+        // XXX The call to list() here is unfortunate, because list()
+        // can fail (eg, a package has a parse error) and if it does
+        // we currently just exit! Which sucks because we don't get
+        // reloading.
         testPackages = _.keys(context.library.list());
       } else {
         testPackages = _.map(argv._, function (p) {
@@ -935,7 +938,8 @@ Fiber(function () {
           minify: new_argv.production,
           once: new_argv.once,
           testPackages: testPackages,
-          settingsFile: new_argv.settings
+          settingsFile: new_argv.settings,
+          banner: "Tests"
         });
       }
     }
@@ -961,7 +965,14 @@ Fiber(function () {
         process.exit(1);
       }
 
-      context.library.rebuildAll();
+      var count = null;
+      var messages = buildmessage.capture(function () {
+        count = context.library.rebuildAll();
+      });
+      if (count)
+        console.log("Built " + count + " packages.");
+      if (messages.hasMessages())
+        process.stdout.write("\n" + messages.formatMessages());
     }
   });
 
